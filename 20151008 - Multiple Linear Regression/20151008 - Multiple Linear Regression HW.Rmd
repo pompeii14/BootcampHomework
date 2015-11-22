@@ -1,0 +1,205 @@
+---
+title: "Multiple Linear Regression HW"
+author: "Joe Eckert"
+date: "October 10, 2015"
+output: html_document
+---
+
+```{r}
+
+# Required Libraries
+library(car)
+
+```
+
+
+###Question #1: Multiple Linear Regression on New York City Restaurants
+
+Load the 04NYCRestaurants.txt dataset into your workspace. This dataset contains survey results from customers of 168 different Italian restaurants in the New York City area. The data are in the form of the average of customer views on various attributes (food, decor, and service) scored on a scale from 1 to 30, along with the average price of dinner. There is also a categorical variable for the location of the restaurant.
+
+#####1.1: Create a scatterplot matrix of all continuous variables colored by Location. From this plot alone, do you see any problems that might arise for multiple linear regression?
+
+```{r}
+
+rest <- read.table('04NYCRestaurants.txt', header = TRUE, sep = " ", quote = "\"", stringsAsFactors = FALSE)
+
+rest$Location <- as.factor(rest$Location)
+
+plot(rest[, 2:5], col = rest$Location)
+
+```
+
+Looking at the scatterplot matrix there appears to be many variables that are correlated with each other.
+
+
+#####1.2: Fit a multiple linear regression predicting the price of a meal based on the customer views and location of the restaurant. For this model:
+  a. Write out the regression equation.
+    Price = -21.956 + 1.538Food + 1.910Decor - 0.003Service -2.068LocationWest
+    
+  b. Interpret the meaning each of the 5 coefficients in context of the problem.
+    Intercept coefficient - assuming food, decor and service were rated 0 and the location was east we would assume an average price of -21.956.  This doenst make sense in terms of the context of the problem, it is just the fixed point where the line is anchored.
+    
+    Food coefficient - holding all else constant an increase of 1 in the food rating will increase price on average by 1.54
+
+    Decor coefficient - holding all else constant an increase of 1 in the decor rating will increase price on average by 1.91
+    
+    Service coefficient - holding all else constant an increase of 1 in the service rating will decrease price on average by 0.003
+
+    LocationWest coefficient - holding all else constant a restaurant in the West is on average 2.07 cheaper than a restaurant in the East
+    
+  c. Are the coefficients significant? How can you tell?
+  
+  Based on the multiple linear regression, the Intercept, Food, Decor, and LocationWest coefficients are statistically significant (p-value less than 0.05)
+  
+  d. Is the overall regression significant? How can you tell?
+  
+  The overall model is significant, the F test shows a p-value less than .05
+  
+  e. Find and interpret the RSE.
+  
+  The RSE is 5.738, estimated standard deviation of the residual errors
+  
+  f. Find and interpret the adjusted coefficient of determination.
+  
+  The adjusted coefficient of determination is .6187, this means that roughly 62% of the variation in price can be explained by the included variables in the model
+  
+```{r}
+
+restModFull <- lm(Price ~ . -Restaurant, data = rest)
+summary(restModFull)
+
+```
+
+  
+#####1.3: I nvestigate the assumptions of the model using the plot() function. Are there any violations?
+
+```{r}
+
+plot(restModFull)
+
+```
+
+The QQ plot appears to show a violation of the normality assumption.  The scale location plot also appears to show a violation of the independent errors assumption.
+
+#####1.4: Investigate the influence plot for the model. Are there any restaurants about which we should be concerned?
+
+```{r}
+
+influencePlot(restModFull)
+
+```
+
+There are a few restaurants that are of concern, 56 and 130 have high residuals, however their leverage is low.  Restaurant 168 has high leverage but a small residual.
+
+#####1.5: Investigate the coefficient variance inflation factors; use these values to discuss multicollinearity.
+
+```{r}
+
+vif(restModFull)
+
+```
+
+The VIF for service is the highest (3.56), which was expected given that it was the least significant coefficient.
+
+#####1.6: Create added variable plots for this model. What conclusions might you draw from these plots?
+
+```{r}
+
+avPlots(restModFull)
+
+```
+
+The added variable plots show that Food and Decor are the most powerful predictors in the model (as expected based on coefficient p-values).  While location has some impact it is relatively small.  The service variable appears to be the least helpful in predicting price.
+
+#####1.7: Fit a new simple linear regression that predicts the price of dinner from the service rating alone. Discuss this regression in light of your answer to part 6.
+
+```{r}
+
+restModSvc <- lm(Price ~ Service, data = rest)
+summary(restModSvc)
+
+plot(Price ~ Service, data = rest)
+abline(restModSvc, lty = 2)
+
+```
+
+Creating a simple linear regression to predict price based soley on service rating appears to be statistically significant (p value < 0.05).  According to the model an increase of 1 in the service rating would increase price on average by 2.82.  However, based on our previous model it appears that the service rating is influenced by the quality of food and decor in the restaurant, therefore a better model would be to predict price based on food, decor and location.
+
+###Question #2: Model Selection on New York City Restaurants
+
+#####2.1: Regress the price of dinner onto the average customer food rating, decor rating, and the restaurant location. In context of this new model, comment on:
+  a. The model summary() output.
+      This model appears to be better than the full model.  All coefficients are now statistically significant.  The model based on the F-test is still significant (p-value less than .05).  We have a small decrease in the RSE to 5.72 and a slight increase in the adjusted coefficient of determination to .6211
+      
+  b. The assumptions of multiple linear regression.
+  As with the full model, the QQ plot appears to show a violation of the normality assumption.  In addition, the scale location plot also appears to show a violation of the independent errors assumption.
+  
+  c. The influence plot of the model.
+  56 and 130 are still outliers in this model.  117 has relatively high leverage but a low residual error.
+  
+  d. The variance inflation factors of the coefficients.
+  By removing the service variable the VIF for the remaining coefficients was reduced.
+  
+  e. The added variable plots for the model.
+  The added variable plots show that Food and Decor are the most powerful predictors in the model (as expected based on coefficient p-values).  While location has some impact it is relatively small. 
+  
+```{r}
+
+restModNew <- lm(Price ~ . -Restaurant -Service, data = rest)
+summary(restModNew)
+plot(restModNew)
+influencePlot(restModNew)
+vif(restModNew)
+avPlots(restModNew)
+
+```
+
+  
+#####2.2: Run a partial F-test to compare this model with the overall model you created in question 1. Interpret your results.
+
+```{r}
+
+anova(restModNew, restModFull)
+
+```
+
+Given that the p-value is greater than 0.05 we cannot reject the null hypothesis that the service coefficient is zero, therefore the model which excludes the service variable is a better model.
+
+#####2.3: Fit a new reduced model that predicts the price of dinner by only the average customer food rating and average customer decor rating. Briefly comment on the model assumptions.
+
+```{r}
+
+restModFD <- lm(Price ~ Food + Decor, data = rest)
+summary(restModFD)
+plot(restModFD)
+
+```
+
+By removing the location variable we see a slight increase in RSE to 5.788 and a slight decrease in the R^2 value to 0.6121.  As with the previous two models, we still see that the QQ plot appears to show a violation of the normality assumption.  In addition, the scale location plot also appears to show a violation of the independent errors assumption.
+
+#####2.4: Compare each of the following models based on AIC:
+  a. The overall model fitted in question 1.
+  b. The overall model without the service variable fitted in question 2 part 1.
+  c. The reduced model fitted in question 2 part 3.
+  
+```{r}
+
+AIC(restModFull, restModNew, restModFD)
+
+```
+
+Based on the AIC, the model that includes food, decor and location is the best model (with the lowest AIC).  The worst model is the one that only includes food and decor.
+  
+#####2.5: Compare each of the models based on BIC.
+
+```{r}
+
+BIC(restModFull, restModNew, restModFD)
+
+```
+
+Based on the BIC, the model that includes just food and decor is the best model (with the lowest BIC), though only slightly better than the model which also includes location.  The worst model is the one that includes all variables.
+
+#####2.6: Do you expect to see the results from part 4 and part 5? Which model would you ultimately choose to use?
+
+The results from part 4 and 5 were expected.  I would ultimately choose to use the model which includes food, decor and location.
