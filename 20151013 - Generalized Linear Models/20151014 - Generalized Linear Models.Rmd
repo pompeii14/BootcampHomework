@@ -1,0 +1,237 @@
+---
+title: "Generalized Linear Models"
+author: "Joe Eckert"
+date: "October 14, 2015"
+output: html_document
+---
+
+##Question #1: Birdkeeping & Lung Cancer
+Load the Sleuth2 library and extract the case2002 dataset. This dataset reports results of a survey conducted from 1972 to 1981 in the Netherlands aiming to see if birdkeeping is a risk factor for lung cancer. Variables include whether or not an individual had lung cancer, whether or not they were birdkeeping, their gender, socioeconomic status, age, years of smoking, and average rate of smoking.
+
+```{r}
+
+library(Sleuth2)
+library(car)
+cancer <- case2002
+head(cancer)
+
+```
+
+
+###1.1. Perform some basic numerical and graphical EDA. In particular, comment on the scatterplots of the continuous variables colored by whether or not an individual had lung cancer. What might be good? What might be bad?
+
+```{r}
+
+summary(cancer)
+sapply(cancer, sd)
+sapply(cancer, class)
+table(cancer$LC)/nrow(cancer)
+plot(cancer, col = cancer$LC)
+
+```
+
+There appears to be some collinearity between AG & YR as well as between YR & CD.  This is expected, as the older someone is the more likely they have been smoking for a longer period of time.
+
+It also appears that there is a higher concentration of lung cancer cases as the years of smoking increases.
+
+###1.2. Fit a logistic regression predicting whether or not an individual has lung cancer that includes all variables in the model.
+
+```{r}
+
+model.all <- glm(LC ~ FM + SS + BK + AG + YR + CD, family = "binomial", data = cancer)
+summary(model.all)
+
+```
+
+###1.3. Briefly assess the appropriate residual plot and an influence plot for the model created in part 2.
+
+```{r}
+
+scatter.smooth(model.all$fit,
+               residuals(model.all, type = "deviance"),
+               lpars = list(col = "red"),
+               xlab = "Fitted Probabilities",
+               ylab = "Deviance Residual Values",
+               main = "Residual Plot for\nLogistic Regression of Lung Cancer Data")
+abline(h = 0, lty = 2)
+influencePlot(model.all)
+
+```
+
+The residual plot appears to be okay, as the average deviance residual value is near zero.
+
+There are a couple of outliers in our data (observations 47 & 28).
+
+###1.4. Conduct and interpret an overall goodness of fit test for the model created in part 2.
+
+```{r}
+
+pchisq(model.all$deviance, model.all$df.residual, lower.tail = FALSE)
+
+```
+
+The overall test for deviance yields a p value of .19, which is greater than .05.  Therefore, we retain the null hypothesis that the full logistic regression model is sufficient.
+
+###1.5. Interpret the coefficient of gender on the log odds scale.
+
+```{r}
+
+summary(model.all)
+
+```
+
+Holding all else constant, females have a higher log odds by .56, however this coefficient is not statistically significant.
+
+###1.6. Interpret the coefficient of socioeconomic status on the odds scale.
+
+```{r}
+
+exp(model.all$coefficients)
+
+```
+
+Holding all else constant, people in a higher socialeconomic status have 1.1 times higher odds of developing lung cancer than those in a lower class.
+
+###1.7. Interpret the 95% confidence interval based on standard errors for the birdkeeping indicator on the log odds scale.
+
+```{r}
+
+confint.default(model.all)
+
+```
+
+We estimate, with 95% confidence, that the true log odds value of having a bird (holding all else constant) is between .56 and 2.17.
+
+###1.8. Interpret the 95% confidence interval based on standard errors for the years of smoking variable on the odds scale.
+
+```{r}
+
+exp(confint.default(model.all))
+
+```
+
+We estimate, with 95% confidence, that the true odds value of developing lung cancer is increased by 1.02x to 1.13x for every year of smoking (holding all else constant).
+
+###1.9. Fit a logistic regression predicting whether or not an individual has lung cancer that includes all variables in the model except the birdkeeping indicator.
+
+```{r}
+
+model.xBK <- glm(LC ~ FM + SS + AG + YR + CD, family = "binomial", data = cancer)
+summary(model.xBK)
+
+```
+
+
+###1.10. Conduct and interpret an overall goodness of fit test for the model created in part 9.
+
+```{r}
+
+pchisq(model.xBK$deviance, model.xBK$df.residual, lower.tail = FALSE)
+
+```
+
+The overall test for deviance yields a p value of .07, which is greater than .05.  Therefore, we retain the null hypothesis that the logistic regression model (excluding birdkeeping) is sufficient.
+
+###1.11. Conduct and interpret a drop in deviance test comparing the two models you’ve created thus far. Which would you keep in favor of the other?
+
+```{r}
+
+reduced.deviance <- model.xBK$deviance
+reduced.df <- model.xBK$df.residual
+
+full.deviance <- model.all$deviance
+full.df <- model.all$df.residual
+
+pchisq(reduced.deviance - full.deviance, reduced.df - full.df, lower.tail = FALSE)
+
+```
+
+The p value of the drop in deviance test is less than .05, which suggests that the full model is preferable to the model excluding birdkeeping.  The full model also has a lower deviance, suggesting it is a better model.
+
+###1.12. Fit a logistic regression predicting whether or not an individual has lung cancer based only on whether or not they have birds and the number of years they have been smoking.
+
+```{r}
+
+model.BKYR <- glm(LC ~ BK + YR, family = "binomial", data = cancer)
+summary(model.BKYR)
+
+```
+
+
+###1.13. Conduct and interpret a drop in deviance test comparing the model you created in part 12 to the model you created in part 2. Which would you keep in favor of the other?
+
+```{r}
+
+reduced.deviance <- model.BKYR$deviance
+reduced.df <- model.BKYR$df.residual
+
+full.deviance <- model.all$deviance
+full.df <- model.all$df.residual
+
+pchisq(reduced.deviance - full.deviance, reduced.df - full.df, lower.tail = FALSE)
+
+```
+
+The p value of the drop in deviance test is .42 (greater than .05, retain the null hypothesis), which suggests that the reduced model (containing birdkeeping and years smoking) is preferable to the full model.
+
+###1.14. Compare the models across: AIC, BIC, R^2dev, Give an argument for choosing the model created in part 12.
+
+```{r}
+
+AIC(model.all, model.xBK, model.BKYR)
+BIC(model.all, model.xBK, model.BKYR)
+
+paste("Full Model R^2:", 1 - model.all$deviance/model.all$null.deviance)
+paste("Excluding Birdkeeping R^2:", 1 - model.xBK$deviance/model.xBK$null.deviance)
+paste("Birdkeeping & Years Smoking R^2:", 1 - model.BKYR$deviance/model.BKYR$null.deviance)
+
+```
+
+When comparing all three models on AIC and BIC, the model with just birdkeeping and years smoking has the lowest AIC and BIC.
+
+When inspecting the McFadden's Pseudo R^2 values we see that the variables in the full model explain 17.6% of the variance in lung cancer occurance, the model excluding birdkeeping explains 11.4% and the model using just birdkeeping and years smoking explains 15.5%.
+
+The model created in part 12 has the lowest AIC and BIC levels.  Although the R^2 value is slightly lower than that of the full model, I would still choose the model from part 12 for it's simplicity (without much reduced accuracy from the full model).
+
+###1.15. Using the model created in part 12, predict:
+
+####1.15.a. The probability of having lung cancer for an individual with an average number of years smoking with and without birds within their household.
+
+```{r}
+
+newdata = with(cancer, data.frame(BK = as.factor(c("NoBird", "Bird")), YR = mean(YR)))
+newdata
+
+cbind(newdata, "Prob. Lung Cancer" = predict(model.BKYR, newdata, type = "response"))
+
+```
+
+Assuming an average number of years smoking, someone with a bird is 47.9% likely to have lung cancer, while someone without a bird is only 17.4% likely.
+
+####1.15.b. The probability of having lung cancer for an individual with no years prior smoking with and without birds within their household.
+
+```{r}
+
+newdata = with(cancer, data.frame(BK = as.factor(c("NoBird", "Bird")), YR = 0))
+newdata
+
+cbind(newdata, "Prob. Lung Cancer" = predict(model.BKYR, newdata, type = "response"))
+
+```
+
+Assuming zero years of smoking, someone with a bird is 154% likely to have lung cancer, while someone without a bird is only 4% likely.
+
+###1.16. Use the model created in part 12 to classify the observations in your dataset as having or not having lung cancer. Comment on how well the model performs as compared to the baseline.
+
+```{r}
+
+LC.predict <- round(model.BKYR$fitted.values)
+table(truth = cancer$LC, prediction = LC.predict)
+
+paste("Correctly predicts no lung cancer:", 85/(85+13))
+paste("Correctly predicts lung cancer:", 22/(22+27))
+paste("Correct predictions:", (85+22)/147)
+
+```
+
+The model accurately predicts lung cancer 45% of the time, suggesting it is better than the baseline of 33% (occurance of lung cancer in the sample).
