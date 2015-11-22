@@ -1,0 +1,104 @@
+#Question 1
+
+mkdir test
+cd test
+git init
+git status
+
+#Question 2
+
+touch a.txt
+git add a.txt
+git status
+git commit -m "initial commit"
+git status
+
+#Question 3
+mkdir subtest
+cd subtest
+touch b.txt
+touch c.txt
+touch d.txt
+cd ..
+touch a1.txt
+touch a2.txt
+git add --all
+
+#Question 4
+
+git status
+git commit -m "add subtest and additional files"
+git log --pretty=oneline
+git log --pretty=oneline -
+
+#Question 5
+
+git remote add origin git@github.com:joeinnyc/test.git
+git push origin master
+git fetch orgin 
+
+#Question 6
+
+vi a.txt
+git status
+git add a.txt
+git diff --cached a.txt
+
+#Question 7
+
+vi a1.txt
+git status
+git checkout a1.txt
+vi a1.txt
+git add a1.txt
+git reset HEAD a1.txt
+git checkout a1.txt
+vi a1.txt
+git add a1.txt
+git commit -m "edit a1.txt"
+git log --oneline
+git revert 28b19ff
+
+#Question 8
+git checkout -b test1
+git reset --hard 8212662
+git checkout master
+git merge test1
+
+#Question 9
+
+git branch -d test1
+git push origin master
+
+#Question 10
+
+git clone git@github.com:schlenktank/day2.git
+touch newfilefromjoe.txt
+git add newfilefromjoe.txt
+git commit -m "joes commit"
+git push origin master
+
+vi fake2.txt
+git add fake2.txt
+git commit -m "joes second commit"
+git push origin master
+
+git pull origin master
+
+vi fake3.txt
+git add fake3.txt
+git status
+git commit -m "joes edit to fake3.txt"
+git push origin master
+
+
+git pull origin master
+
+echo "joe was here" fake1.txt
+git add fake1.txt
+git commit -m "joes edit to fake1"
+git push origin master
+
+
+
+
