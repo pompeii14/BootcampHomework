@@ -1,0 +1,380 @@
+---
+title: "Unsupervised Machine Learning"
+author: "Joe Eckert"
+date: "November 13, 2015"
+output: html_document
+---
+
+```{r}
+library(HSAUR)
+library(psych)
+library(glmnet)
+```
+
+
+###Question #1: Principal Component Analysis
+Load the  heptathlondataset from the  HSAURlibrary into your workspace. A heptathlon is a combined track and field event-based contest for women. This dataset contains scores on each event for the 1988 olympic heptathlon competition held in Seoul.
+```{r}
+hept <- heptathlon
+head(hept)
+```
+
+
+####1. Create a scatterplot matrix of all variables in the dataset. Briefly comment on the nature of the data.
+```{r}
+plot(hept)
+```
+There appears to be a linear relationship between all events (except javelin and run800m) and score.  Also, there appears to be some linear relationship between the hurdles event and the longjump(-), run200m(+) and shot(-).  Shot also has a linear relationship with run200m(-) and longjump(+).
+
+####2. It will help to have all event scores going in the “same direction” (i.e., a higher event score implies a better performance, and a lower event score implies a worse performance). To do so, transform the hurdle and running variables by subtracting the original scores for each heptathlete from the maximum score of each of those variables.
+```{r}
+hept[,'hurdles'] = max(hept[,'hurdles']) - hept[,'hurdles']
+hept[,'run200m'] = max(hept[,'run200m']) - hept[,'run200m']
+hept[,'run800m'] = max(hept[,'run800m']) - hept[,'run800m']
+```
+
+####3. Create a scatterplot matrix of all the event score variables in the “same direction.” Briefly comment on the nature of the data.
+```{r}
+plot(hept)
+```
+Now all events have a postive linear relationship with the score.
+
+####4. Create a scree-plot of your newly created dataset that doesn’t include the  score variable. From this plot, describe how you determine the number of principal components to extract in three different ways.
+```{r}
+hept.noscr = hept[,-8]
+fa.parallel(hept.noscr, fa="pc", n.iter=100)
+```
+Looking at the scree plots I would choose 2 principal components.  There are 2 components with an eigen value greater than 1, this also happens to be the 'elbow' of the plot.
+
+####5. Extract the appropriate number of principal components from your dataset that does not include the  score variable and save this object.
+```{r}
+hept.pca = principal(hept.noscr, nfactors=2, rotate="none")
+hept.pca
+```
+
+####6. What is the variance of the each of your extracted principal components?
+```{r}
+hept.pca$loadings
+```
+The eigenvalues of the principal components (standardized variance) are 4.46 and 1.194 respectively.
+
+####7. How much variability in the original dataset is captured by each of your extracted principal components?
+```{r}
+hept.pca$loadings
+```
+Principal component 1 explains 63.7% of the variance, principal component 2 explains 17.1% of the variance.  Total variance accounted for by both PCs is 80.8%.
+
+####8. Create a plot of the principal component loadings against each other.
+```{r}
+factor.plot(hept.pca, labels = colnames(hept.noscr))
+```
+
+####9. Use the object you created in part 5 and the plot in part 8 to help construct interpretations for each principal component vector.
+PC1 is composed mostly of longjump and hurdles, but all variables except javelin are included.  PC2 is mainly just javelin, which makes sense given the scatterplot matrix showing a lack of relationship to the other variables.
+
+####10. Create a scatterplot of each of the competitor’s results projected onto the reduced dimensions.
+```{r}
+plot(hept.pca$scores)
+hept.pca$scores
+```
+
+####11.Comment on any observations that appear to be outliers. Who are these competitors and why do they appear to be outliers?
+```{r}
+hept[25,]
+hept[hept$score==min(hept$score),]
+```
+Launa(PNG) appears to be the only outlier.  It appears that Launa did not participate in hurdles or run800m and also had the lowest score in the dataset.
+
+###Question #2: Ridge Regression
+Read in the  08prostate.txt dataset into your workspace. This dataset comes from a study by Stamey et a. (1989) of prostate cancer, measuring the correlation between the level of a prostate-specific antigen and some covariates. The included variables are the log-cancer volume, log-prostate weight, age of patient, log-amount of benign hyperplasia, seminal vesicle invasion, log-capsular penetration, Gleason score, and percent of Gleason scores 4 or 5; the response variable is the log-psa.
+```{r}
+prost <- read.table('08prostate.txt', header=TRUE)
+head(prost)
+```
+
+####1. Create a training set of approximately 80% of your data and a test set of approximately 20% of your data (N B: Use  set.seed(0)so your results will be reproducible.)
+```{r}
+set.seed(0)
+train <- sample(1:nrow(prost), 8*nrow(prost)/10)
+test <- (-train)
+
+prost.train <- prost[train, ]
+prost.test <- prost[test, -9]
+```
+
+####2. Fit a slew of ridge regression models on your training data by checking across a wide range of lambda values. Save the coefficients of these models in an object.
+```{r}
+prost.x <- model.matrix(lpsa ~ ., prost.train)[,-1]
+prost.y <- prost.train$lpsa
+
+grid <- 10^seq(5, -2, length = 100)
+
+prost.ridge <- glmnet(prost.x, prost.y, alpha = 0, lambda = grid)
+
+dim(coef(prost.ridge))
+
+prost.ridge.coef <- coef(prost.ridge)
+```
+
+####3. Plot the coefficients of these models and comment on the shrinkage.
+```{r}
+plot(prost.ridge, xvar = "lambda", label = TRUE, main = "Ridge Regression")
+```
+Coefficients approach zero around lambda ~ 6.
+
+####4. Perform 10-fold cross-validation on your training data and save the output as an object. Once a gain, use  set.seed(0).  (NB: You can manually define the values of lambda to as you did in part 2).
+```{r}
+set.seed(0)
+prost.ridge.cv = cv.glmnet(prost.x, prost.y, alpha = 0, nfolds = 10)
+```
+
+####5. Create and interpret a plot associated with the 10-fold cross-validation completed in part 4.
+```{r}
+plot(prost.ridge.cv, main = "Ridge Regression\n")
+```
+The log(Lambda) with the lowest MSE is ~ -2
+
+####6. What is the best lambda?
+```{r}
+bestlambda.ridge = prost.ridge.cv$lambda.min
+bestlambda.ridge
+log(bestlambda.ridge)
+```
+The best lambda is .1352 ~ e^-2
+
+####7. What is the test MSE associated with this lambda value?
+```{r}
+prost.ridge.best = predict(prost.ridge, s = bestlambda.ridge, newx = as.matrix(prost.test))
+mean((prost.ridge.best - prost[test, 9])^2)
+```
+The test MSE associated with the best lambda value is .4913
+
+####8. Refit the ridge regression using the best lambda using every observation in your original dataset. Briefly comment on the coefficient estimates.
+```{r}
+prost.all.x = model.matrix(lpsa ~ ., prost)[,-1]
+prost.all.y = prost[,9]
+
+prost.ridge.all = glmnet(prost.all.x, prost[,9], alpha = 0)
+predict(prost.ridge.all, type = "coefficients", s = bestlambda.ridge)
+```
+The coefficients are small (all less than one), svi and lweight have the highest influence on prostate cancer.
+
+####9. What is the overall MSE for the model you fit in part 8? How does this compare to the MSE you found in part 7?
+```{r}
+prost.ridge.all.pred = predict(prost.ridge.all, s = bestlambda.ridge, newx = prost.all.x)
+mean((prost.ridge.all.pred - prost[,9])^2)
+```
+The overall MSE for the model is .45497, less than the model from part 7, which makes sense given that we used more observations.
+
+###Question #3: Lasso Regression
+Continue using the  08prostate.txt dataset you already loaded into your workspace.
+####1. Repeat the entire analysis performed in question #2, except use the method of lasso regression instead.
+####1.2. Fit a slew of lasso regression models on your training data by checking across a wide range of lambda values. Save the coefficients of these models in an object.
+```{r}
+prost.x <- model.matrix(lpsa ~ ., prost.train)[,-1]
+prost.y <- prost.train$lpsa
+
+grid <- 10^seq(5, -2, length = 100)
+
+prost.lasso <- glmnet(prost.x, prost.y, alpha = 1, lambda = grid)
+
+dim(coef(prost.lasso))
+
+prost.lasso.coef <- coef(prost.lasso)
+```
+
+####1.3. Plot the coefficients of these models and comment on the shrinkage.
+```{r}
+plot(prost.lasso, xvar = "lambda", label = TRUE, main = "Lasso Regression")
+```
+
+####4. Perform 10-fold cross-validation on your training data and save the output as an object. Once a gain, use  set.seed(0).  (NB: You can manually define the values of lambda to as you did in part 2).
+```{r}
+set.seed(0)
+prost.lasso.cv = cv.glmnet(prost.x, prost.y, alpha = 1, nfolds = 10)
+```
+
+####5. Create and interpret a plot associated with the 10-fold cross-validation completed in part 4.
+```{r}
+plot(prost.lasso.cv, main = "Lasso Regression\n")
+```
+The log(Lambda) with the lowest MSE is ~ -3.2
+
+####6. What is the best lambda?
+```{r}
+bestlambda.lasso = prost.lasso.cv$lambda.min
+bestlambda.lasso
+log(bestlambda.lasso)
+```
+The best lambda is .0394 ~ e^-3.2
+
+####7. What is the test MSE associated with this lambda value?
+```{r}
+prost.lasso.best = predict(prost.lasso, s = bestlambda.lasso, newx = as.matrix(prost.test))
+mean((prost.lasso.best - prost[test, 9])^2)
+```
+The test MSE associated with the best lambda value is .5053
+
+####8. Refit the ridge regression using the best lambda using every observation in your original dataset. Briefly comment on the coefficient estimates.
+```{r}
+prost.all.x = model.matrix(lpsa ~ ., prost)[,-1]
+prost.all.y = prost[,9]
+
+prost.lasso.all = glmnet(prost.all.x, prost[,9], alpha = 1)
+predict(prost.lasso.all, type = "coefficients", s = bestlambda.lasso)
+```
+The coefficients are small (all less than one), svi, lweight and lcavol have the highest influence on prostate cancer.  Coefficients for lcp and gleason are 0.
+
+####9. What is the overall MSE for the model you fit in part 8? How does this compare to the MSE you found in part 7?
+```{r}
+prost.lasso.all.pred = predict(prost.lasso.all, s = bestlambda.lasso, newx = prost.all.x)
+mean((prost.lasso.all.pred - prost[,9])^2)
+```
+The overall MSE for the model is .46125, less than the model from part 7, which makes sense given that we used more observations.
+
+####2. Compare and contrast your ultimate ridge and lasso models. Which would you choose to use? Why?
+The overall and test MSEs for both models are similar enough, I would choose the lasso model because it allows for feature selection and with best lambda removes both lcp and gleason.
+
+###Question #4: K-Means
+Read in the  08protein.txt dataset into your workspace. This dataset contains protein consumption information from 1973 on nine different food groups across 25 different European countries.
+####1. Use the following commands to read the data into your workspace appropriately and scale the variables: protein = read.table("08protein.txt", sep = 't', header = TRUE) protein.scaled = as.data.frame(scale(protein[, 1])) rownames(protein.scaled) = protein$Country
+```{r}
+protein = read.table("08protein.txt", sep = '\t', header = TRUE)
+protein.scaled = as.data.frame(scale(protein[, -1])) 
+rownames(protein.scaled) = protein$Country
+```
+
+####2. Create and interpret a scree-plot for the within-cluster variance for various values of K used in the K-means algorithm.
+  a. Why might this graph indicate that K-means is not truly appropriate to model the data?
+```{r}
+wssplot = function(data, nc = 15, seed = 0) {
+  wss = (nrow(data) - 1) * sum(apply(data, 2, var))
+  for (i in 2:nc) {
+    set.seed(seed)
+    wss[i] = sum(kmeans(data, centers = i, iter.max = 100, nstart = 100)$withinss)
+  }
+  plot(1:nc, wss, type = "b",
+       xlab = "Number of Clusters",
+       ylab = "Within-Cluster Variance",
+       main = "Scree Plot for the K-Means Procedure")
+}
+wssplot(protein.scaled)
+```
+The scree plot shows a smooth curve which means that each additional cluster does little to reduce marginal within cluster variance.  This could mean that k means clustering is not the best method for this dataset.
+
+####3. Create and store 5 different K-means solutions that run the algorithm only 1 time each. (N B: Use  set.seed(0) so your results will be reproducible.)
+```{r}
+set.seed(0)
+km.p1 = kmeans(protein.scaled, centers = 3)
+km.p2 = kmeans(protein.scaled, centers = 3)
+km.p3 = kmeans(protein.scaled, centers = 3)
+km.p4 = kmeans(protein.scaled, centers = 3)
+km.p5 = kmeans(protein.scaled, centers = 3)
+```
+
+####4. Create and store 1 K-means solution that was selected from running the algorithm 100 separate times. (N B: Use  set.seed(0) so your results will be reproducible.)
+```{r}
+set.seed(0)
+km.p = kmeans(protein.scaled, centers = 3, nstart = 100)
+```
+
+####5. Plot the 6 different solutions from part 3 and 4 with:
+  a. Cereals on the x-axis.
+  b. RedMeat on the y-axis.
+  c. Colors for the different cluster assignments.
+  d. Labels for the total within-cluster variances.
+```{r}
+par(mfrow = c(2, 3))
+plot(protein.scaled$Cereals, protein.scaled$RedMeat, col = km.p1$cluster,
+     xlab = "Cereals", ylab = "Red Meat",
+     main = paste("Single K-Means Attempt 1: \n", round(km.p1$tot.withinss, 4)))
+plot(protein.scaled$Cereals, protein.scaled$RedMeat, col = km.p2$cluster,
+     xlab = "Cereals", ylab = "Red Meat",
+     main = paste("Single K-Means Attempt 2: \n", round(km.p2$tot.withinss, 4)))
+plot(protein.scaled$Cereals, protein.scaled$RedMeat, col = km.p3$cluster,
+     xlab = "Cereals", ylab = "Red Meat",
+     main = paste("Single K-Means Attempt 3: \n", round(km.p3$tot.withinss, 4)))
+plot(protein.scaled$Cereals, protein.scaled$RedMeat, col = km.p4$cluster,
+     xlab = "Cereals", ylab = "Red Meat",
+     main = paste("Single K-Means Attempt 4: \n", round(km.p4$tot.withinss, 4)))
+plot(protein.scaled$Cereals, protein.scaled$RedMeat, col = km.p5$cluster,
+     xlab = "Cereals", ylab = "Red Meat",
+     main = paste("Single K-Means Attempt 5: \n", round(km.p5$tot.withinss, 4)))
+plot(protein.scaled$Cereals, protein.scaled$RedMeat, col = km.p$cluster,
+     xlab = "Cereals", ylab = "Red Meat",
+     main = paste("K-Means with 100 Attempts: \n", round(km.p$tot.withinss, 4)))
+```
+####6. Plot the solution from part 4 with:
+  a. Cereals on the x-axis.
+  b. RedMeat on the y-axis.
+  c. A label for the total within-cluster variance.
+  d. Points for the centroids of each cluster.
+  e. A horizontal line at 0.
+  f. A vertical line at 0.
+  g. Text listing the country for each observation in your dataset (instead of points), colored by the different cluster assignments. H int: Use  type = “n”when creating the  plot(). Then, use the  text()function in tandem with the  rownames() function.
+```{r}
+par(mfrow = c(1,1))
+plot(protein.scaled$Cereals, protein.scaled$RedMeat, col = km.p$cluster,
+     xlab = "Cereals", ylab = "Red Meat", type = "n",
+     main = paste("Best K-Means Attempt out of 100\n WCV: ", round(km.p$tot.withinss, 4)))
+points(km.p$centers[, 6], km.p$centers[, 1], pch = 16, col = c(1:3))
+abline(h=0)
+abline(v=0)
+text(protein.scaled$Cereals, protein.scaled$RedMeat, labels=row.names(protein.scaled), col = km.p$cluster)
+```
+
+####7. Interpret the clustering solution based on the graph you created in part 6.
+The k means clustering solution produces 3 groups (one with low cereal/high meant, low cereal/low meat and high cereal/high meat).  Based on the scree plot for part one I still wouldnt use this as the clusters are not strong classifiers.
+
+###Question #5: Hierarchical Clustering
+Continue using the  08protein.txt dataset you already loaded into your workspace.
+
+####1. Calculate and store pairwise distances for each observation in the dataset.
+```{r}
+dist = dist(protein.scaled)
+```
+
+####2. Fit hierarchical clustering solutions using single, complete, and average linkage.
+```{r}
+fit.single = hclust(dist, method = "single")
+fit.complete = hclust(dist, method = "complete")
+fit.average = hclust(dist, method = "average")
+```
+
+####3. Visualize the dendrograms created in part 2.
+  a. Give an argument as to why single linkage might not be good to use.
+  b. Give an argument as to why complete linkage might be good to use.
+```{r}
+par(mfrow = c(1, 3))
+plot(fit.single, hang = -1, main = "Single Linkage")
+plot(fit.complete, hang = -1, main = "Complete Linkage")
+plot(fit.average, hang = -1, main = "Average Linkage")
+```
+Complete linkage is better to use because it uses the biggest difference between groups.
+
+####4. Cut your complete linkage tree into 2 groups.
+  a. Visualize the solution overlaid on top of the dendrogram.
+  b. Interpret the clusters by aggregating across the median.
+```{r}
+par(mfrow = c(1,1))
+clusters.c2 = cutree(fit.complete, k = 2)
+clusters.c2
+table(clusters.c2)
+aggregate(protein.scaled, by = list(cluster = clusters.c2), median)
+plot(fit.complete, hang = -1, main = "Dendrogram of Average Linkage\n2 Clusters")
+rect.hclust(fit.complete, k = 2)
+```
+Two clusters created, not much distinction by location on the two clusters.
+
+####5. Cut your complete linkage tree into 5 groups.
+  a. Visualize the solution overlaid on top of the dendrogram.
+  b. Interpret the clusters by aggregating across the median.
+```{r}
+clusters.c5 = cutree(fit.complete, k = 5)
+clusters.c5
+table(clusters.c5)
+aggregate(protein.scaled, by = list(cluster = clusters.c5), median)
+plot(fit.complete, hang = -1, main = "Dendrogram of Average Linkage\n2 Clusters")
+rect.hclust(fit.complete, k = 5)
+```
+Here there are five clusters.  These clusters appear to better segment the countries based on their proximity to each other, suggesting similar diets.
